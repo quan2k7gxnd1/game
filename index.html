@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tìm Điểm Khác Nhau</title>
+<style>
+  :root{ --accent:#1e90ff; }
+  body{
+    font-family:Arial,Helvetica,sans-serif;
+    background:url('background.jpg') no-repeat center center/cover;
+    margin:0;
+    color:#222;
+    min-height:100vh;
+    display:block;
+  }
+  .container{max-width:1000px;width:100%;padding:12px;margin:auto}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  button{padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+  .top-info{display:flex;gap:18px;align-items:center}
+  .hearts{font-size:20px;color:#e74c3c}
+  .score{font-weight:700}
+  #game{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;padding-top:6px}
+  .wrap{position:relative;border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+  img{display:block;max-width:420px;width:100%;height:auto;user-select:none}
+  .status{margin-top:6px;text-align:center;color:#333}
+  footer{margin-top:18px;text-align:center;color:#666;font-size:13px}
+
+  /* Popup */
+  #popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+  #popupContent {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    min-width: 250px;
+  }
+  #popup button {
+    margin-top: 15px;
+    padding: 8px 15px;
+    border: none;
+    background: #ff4747;
+    color: white;
+    cursor: pointer;
+    border-radius: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Giao diện chơi -->
+  <div id="gameScreen">
+    <header>
+      <div class="top-info">
+        <div class="small">Điểm: <span id="score">0</span></div>
+        <div class="hearts" id="hearts">❤️❤️❤️❤️❤️</div>
+      </div>
+    </header>
+
+    <div class="status" id="status">Sẵn sàng! Chỉ click ảnh bên phải để tìm điểm khác nhau.</div>
+
+    <div id="game">
+      <div class="wrap">
+        <img id="imgLeft" src="anh_1.jpg" alt="Left"/>
+      </div>
+      <div class="wrap">
+        <img id="imgRight" src="anh_2.jpg" alt="Right"/>
+      </div>
+    </div>
+
+    <footer>
+      Tìm điểm khác nhau giữa ảnh gốc (trái) và ảnh đã chỉnh (phải)
+    </footer>
+  </div>
+
+</div>
+
+<!-- Popup -->
+<div id="popup">
+  <div id="popupContent">
+    <h3>Topup – Trò chơi kết thúc</h3>
+    <button id="closePopup">Đóng</button>
+  </div>
+</div>
+
+<!-- audio -->
+<audio id="audioRight" src="dung.mp3"></audio>
+<audio id="audioWrong" src="sai.mp3"></audio>
+
+<script>
+(function(){
+  const DEFAULT_LIVES = 5;
+  const coords = { xPct: 20, yPct: 10 };
+  const threshold = 10; // ngưỡng % chính xác
+
+  const scoreEl = document.getElementById('score');
+  const heartsEl = document.getElementById('hearts');
+  const imgRight = document.getElementById('imgRight');
+  const status = document.getElementById('status');
+  const audioRight = document.getElementById('audioRight');
+  const audioWrong = document.getElementById('audioWrong');
+
+  const popup = document.getElementById('popup');
+  const closePopupBtn = document.getElementById('closePopup');
+
+  let lives = DEFAULT_LIVES;
+  let score = 0;
+  let network = 1; // 1 = online, 0 = offline (mô phỏng)
+
+  function renderHearts(){
+    heartsEl.innerHTML = '❤️'.repeat(lives) + '<span style="opacity:.2;">' + '❤️'.repeat(Math.max(0, DEFAULT_LIVES - lives)) + '</span>';
+  }
+  function renderScore(){
+    scoreEl.textContent = score;
+  }
+  function clientToPct(imgEl, clientX, clientY){
+    const r = imgEl.getBoundingClientRect();
+    const x = (clientX - r.left) / r.width * 100;
+    const y = (clientY - r.top) / r.height * 100;
+    return { xPct: x, yPct: y };
+  }
+  function pctDist(a, b){
+    return Math.hypot(a.xPct - b.xPct, a.yPct - b.yPct);
+  }
+
+  function onRightImageClick(e){
+    const pct = clientToPct(imgRight, e.clientX, e.clientY);
+    const dist = pctDist(pct, coords);
+    if(dist <= threshold){
+      score++;
+      renderScore();
+      audioRight.currentTime = 0; audioRight.play().catch(()=>{});
+      status.textContent = `Chính xác! +1 điểm.`;
+    } else {
+      lives = Math.max(0, lives - 1);
+      renderHearts();
+      audioWrong.currentTime = 0; audioWrong.play().catch(()=>{});
+      status.textContent = `Sai! Còn ${lives} mạng.`;
+      if(lives <= 0){
+        status.textContent = `Hết mạng! Điểm: ${score}.`;
+      }
+    }
+  }
+
+  imgRight.addEventListener('click', onRightImageClick);
+
+  renderScore();
+  renderHearts();
+
+  // Giả lập kiểm tra mạng mỗi 3 giây
+  setInterval(()=>{
+    if(network === 0){
+      popup.style.display = 'flex';
+    }
+  }, 3000);
+
+  closePopupBtn.addEventListener('click', ()=>{
+    popup.style.display = 'none';
+    // reset game
+    lives = DEFAULT_LIVES;
+    score = 0;
+    renderScore();
+    renderHearts();
+    network = 1;
+  });
+})();
+</script>
+</body>
+</html>
