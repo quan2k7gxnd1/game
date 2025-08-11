@@ -12,9 +12,8 @@
     margin:0;
     color:#222;
     min-height:100vh;
-    display:block;
   }
-  .container{max-width:1000px;width:100%;padding:12px;margin:auto}
+  .container{max-width:1000px;padding:12px;margin:auto}
   header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
   button{padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#fff;cursor:pointer}
   .top-info{display:flex;gap:18px;align-items:center}
@@ -26,13 +25,23 @@
   .status{margin-top:6px;text-align:center;color:#333}
   footer{margin-top:18px;text-align:center;color:#666;font-size:13px}
 
+  /* Điểm đánh dấu */
+  .point-marker {
+    position:absolute;
+    width:14px;
+    height:14px;
+    background:rgba(255,255,0,0.6);
+    border:2px solid red;
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+    pointer-events:none;
+  }
+
   /* Popup */
   #popup {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
     background: rgba(0,0,0,0.7);
     display: none;
     align-items: center;
@@ -64,7 +73,7 @@
   <div id="gameScreen">
     <header>
       <div class="top-info">
-        <div class="small">Điểm: <span id="score">0</span></div>
+        <div>Điểm: <span id="score">0</span></div>
         <div class="hearts" id="hearts">❤️❤️❤️❤️❤️</div>
       </div>
     </header>
@@ -75,7 +84,7 @@
       <div class="wrap">
         <img id="imgLeft" src="anh_1.jpg" alt="Left"/>
       </div>
-      <div class="wrap">
+      <div class="wrap" id="rightWrap">
         <img id="imgRight" src="anh_2.jpg" alt="Right"/>
       </div>
     </div>
@@ -102,47 +111,71 @@
 <script>
 (function(){
   const DEFAULT_LIVES = 5;
-  const coords = { xPct: 20, yPct: 10 };
-  const threshold = 10; // ngưỡng % chính xác
+  // 3 điểm tọa độ của ảnh bên phải (theo %)
+  const points = [
+    {xPct: 20, yPct: 10},
+    {xPct: 65, yPct: 45},
+    {xPct: 80, yPct: 78}
+  ];
+  const threshold = 8; // khoảng % chấp nhận
+  let foundPoints = [];
 
   const scoreEl = document.getElementById('score');
   const heartsEl = document.getElementById('hearts');
   const imgRight = document.getElementById('imgRight');
+  const rightWrap = document.getElementById('rightWrap');
   const status = document.getElementById('status');
   const audioRight = document.getElementById('audioRight');
   const audioWrong = document.getElementById('audioWrong');
-
   const popup = document.getElementById('popup');
   const closePopupBtn = document.getElementById('closePopup');
 
   let lives = DEFAULT_LIVES;
   let score = 0;
-  let network = 1; // 1 = online, 0 = offline (mô phỏng)
+  let network = 1; // 1 = online, 0 = offline
 
   function renderHearts(){
-    heartsEl.innerHTML = '❤️'.repeat(lives) + '<span style="opacity:.2;">' + '❤️'.repeat(Math.max(0, DEFAULT_LIVES - lives)) + '</span>';
+    heartsEl.innerHTML = '❤️'.repeat(lives) + '<span style="opacity:.2;">' + '❤️'.repeat(DEFAULT_LIVES - lives) + '</span>';
   }
-  function renderScore(){
-    scoreEl.textContent = score;
-  }
+  function renderScore(){ scoreEl.textContent = score; }
   function clientToPct(imgEl, clientX, clientY){
     const r = imgEl.getBoundingClientRect();
-    const x = (clientX - r.left) / r.width * 100;
-    const y = (clientY - r.top) / r.height * 100;
-    return { xPct: x, yPct: y };
+    return {
+      xPct: (clientX - r.left) / r.width * 100,
+      yPct: (clientY - r.top) / r.height * 100
+    };
   }
   function pctDist(a, b){
     return Math.hypot(a.xPct - b.xPct, a.yPct - b.yPct);
   }
-
+  function markPoint(point){
+    const marker = document.createElement('div');
+    marker.className = 'point-marker';
+    marker.style.left = point.xPct + '%';
+    marker.style.top = point.yPct + '%';
+    rightWrap.appendChild(marker);
+  }
+  function showAllPoints(){
+    points.forEach(p => markPoint(p));
+  }
   function onRightImageClick(e){
     const pct = clientToPct(imgRight, e.clientX, e.clientY);
-    const dist = pctDist(pct, coords);
-    if(dist <= threshold){
+    let correctIndex = -1;
+    points.forEach((p,i)=>{
+      if(!foundPoints.includes(i) && pctDist(pct,p) <= threshold){
+        correctIndex = i;
+      }
+    });
+    if(correctIndex >= 0){
+      foundPoints.push(correctIndex);
       score++;
       renderScore();
       audioRight.currentTime = 0; audioRight.play().catch(()=>{});
-      status.textContent = `Chính xác! +1 điểm.`;
+      status.textContent = `Tìm đúng ${foundPoints.length}/3 điểm!`;
+      markPoint(points[correctIndex]);
+      if(foundPoints.length === points.length){
+        status.textContent = `Bạn đã tìm đủ 3 điểm!`;
+      }
     } else {
       lives = Math.max(0, lives - 1);
       renderHearts();
@@ -155,26 +188,28 @@
   }
 
   imgRight.addEventListener('click', onRightImageClick);
-
   renderScore();
   renderHearts();
 
-  // Giả lập kiểm tra mạng mỗi 3 giây
+  // Mô phỏng mạng mất -> show popup
   setInterval(()=>{
-    if(network === 0){
-      popup.style.display = 'flex';
-    }
+    if(network === 0){ popup.style.display = 'flex'; }
   }, 3000);
 
   closePopupBtn.addEventListener('click', ()=>{
     popup.style.display = 'none';
-    // reset game
     lives = DEFAULT_LIVES;
     score = 0;
+    foundPoints = [];
     renderScore();
     renderHearts();
     network = 1;
+    rightWrap.querySelectorAll('.point-marker').forEach(el=>el.remove());
+    status.textContent = "Sẵn sàng! Chỉ click ảnh bên phải để tìm điểm khác nhau.";
   });
+
+  // Nếu muốn hiển thị sẵn điểm để test, bỏ comment:
+  // showAllPoints();
 })();
 </script>
 </body>
